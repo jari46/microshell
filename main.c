@@ -92,7 +92,7 @@ void change_directory(char **command)
 		}
 	}
 }
-
+#include <stdio.h>
 /*type 2*/
 void execve_single_command(char **command, char **envp)
 {
@@ -104,7 +104,7 @@ void execve_single_command(char **command, char **envp)
 		if (execve(command[0], command, envp) == SYSFAIL) syscall_error();
 	}
 	else
-		waitpid(pid, NULL, 0);
+		waitpid(0, NULL, 0);
 }
 
 char **get_next_command(char **job)
@@ -127,11 +127,14 @@ char **get_next_command(char **job)
 	return (command);
 }
 
-char **get_next_job(char **argv)
+char **get_next_job(int argc, char **argv)
 {
 	static int offset = 1;
 	char **job;
 	int job_len;
+
+	if (argc <= offset)
+		return (NULL);
 
 	job_len = count_until(argv, offset, ";");
 	if (is_with(argv, ";") == TRUE)
@@ -154,6 +157,7 @@ char **get_next_job(char **argv)
 	offset += job_len;
 	return (job);
 }
+
 /*type 3*/
 void execve_multi_commands(char **job, char **envp)
 {
@@ -207,19 +211,20 @@ int main(int argc, char **argv, char **envp)
 		char **job = NULL;
 		while (TRUE)
 		{
-			if ((job = get_next_job(argv)) == NULL)//allocate, 마지막에 NULL도 붙여주어야 cd에서 셀 수 있다. ; 없이 보내주고 offset은 그 다음으로 이동
+			if ((job = get_next_job(argc, argv)) == NULL)
 				break ;
-			if (is_with(job, "|") == FALSE)
-			{
-				if (strcmp(job[0], "cd") == SAME)
-					change_directory(job);/*type 1*/
-				else
+			//if (is_with(job, "|") == FALSE)
+			//{
+			//	if (strcmp(job[0], "cd") == SAME)
+			//		change_directory(job);/*type 1*/
+			//	else
 					execve_single_command(job, envp);/*type 2*/
-			}
-			else
-				execve_multi_commands(job, envp);/*type 3*/
+			//}
+			//else
+			//	execve_multi_commands(job, envp);/*type 3*/
 			free(job);
+			job = NULL;
 		}
 	}
-	return (0);
+	exit(0);
 }
