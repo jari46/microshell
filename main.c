@@ -1,9 +1,9 @@
-//allowed functions: malloc, free, write, close, fork, waitpid, signal, kill, exit, chdir, execve, dup, dup2, pipe, strcmp, n
+//allowed functions: malloc, free, write, close, fork, waitpid, signal, kill, exit, chdir, execve, dup, dup2, pipe, strcmp, strncmp
 
 #define NULL 0
 #define TRUE 1
 #define FALSE 0
-#define SYSFAIL -1 /*system call fail*/
+#define SYSFAIL -1 /* system call return */
 #define CHILD 0
 #define READ 0
 #define WRITE 1
@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <string.h>
-#include <stdio.h>
 
 /* 
  * ERROR CONTROL
@@ -23,19 +22,19 @@ void display_error(const char *str)
 	int i = 0;
 	while (str[i])
 	{
-		write(STDERR_FILENO, &str[i], 1);//also can fail, but no error messages can be displayed...
+		write(STDERR_FILENO, &str[i], 1);
 		i++;
 	}
 }
 
-void syscall_error()
+void syscall_error(void)
 {
 	display_error("error: fatal\n");
 	exit(1);
 }
 
 /* 
- * UTILS
+ * UTILS FOR 'ARRAY OF POINTERS'
  */
 
 int count_until(char *delim, char **job, int offset)
@@ -91,24 +90,24 @@ void execve_job(char **job, char **envp)
 	int fd_pipe[2];
 	pid_t pid;
 	int child_num = 0;
-	char **command = NULL;
-	int offset = -1;
 
 	if ((fd_read = dup(STDIN_FILENO)) == SYSFAIL) syscall_error();
 	int job_len = count_until("", job, 0);
+	char **command = NULL;
+	int offset = -1;
 	while (offset < job_len)
 	{
 		offset++;/* go to the start-index */
 		if ((command = get_next_until("|", job, &offset)) == NULL)/* after this: argv[offset] == "|" */
 			break;
-		if (offset < job_len)
+		if (offset < job_len)/* if it is not the last command */
 			if (pipe(fd_pipe) == SYSFAIL) syscall_error();
 		if ((pid = fork()) == SYSFAIL) syscall_error();
 		if (pid == CHILD)
 		{
 			if (dup2(fd_read, STDIN_FILENO) == SYSFAIL) syscall_error();
 			if (close(fd_read) == SYSFAIL) syscall_error();
-			if (offset < job_len)
+			if (offset < job_len)/* if it is not the last command */
 			{
 				if (dup2(fd_pipe[WRITE], STDOUT_FILENO) == SYSFAIL) syscall_error();
 				if (close(fd_pipe[READ]) == SYSFAIL) syscall_error();
@@ -118,22 +117,22 @@ void execve_job(char **job, char **envp)
 		}
 		else
 		{
-			if (offset < job_len)
+			if (offset < job_len)/* if it is not the last command */
 			{
 				if (dup2(fd_pipe[READ], fd_read) == SYSFAIL) syscall_error();
 				if (close(fd_pipe[READ]) == SYSFAIL) syscall_error();
 				if (close(fd_pipe[WRITE]) == SYSFAIL) syscall_error();
 			}
 			child_num++;
-			free(command);/*does not return a value*/
+			free(command);
 			command = NULL;
 		}
 	}
-	close(fd_read);
+	if (close(fd_read) == SYSFAIL) syscall_error();
 	int i = 0;
 	while (i < child_num)
 	{
-		waitpid(0, NULL, 0);
+		if (waitpid(0, NULL, 0) == SYSFAIL) syscall_error();
 		i++;
 	}
 }
